@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import ReactSelect from "react-select";
+import React, { useEffect, useState, useCallback } from "react";
+import Select from "react-select";
 import {
   getUsersForProcedure,
   assignUserToProcedure,
@@ -8,85 +8,86 @@ import {
   removeAllUsersFromProcedure,
 } from "../../../api/api";
 
-const PlanProcedureItem = ({ procedure, users, planId }) => {
-  const [selectedUsers, setSelectedUsers] = useState([]);
+const ProcedureAssignment = ({ procedure, users, planId }) => {
+  const [assignedUsers, setAssignedUsers] = useState([]);
 
+  const identifiers = {
+    planId,
+    procedureId: procedure.procedureId,
+  };
+
+  // Load currently assigned users
   useEffect(() => {
-    let isMounted = true; // flag to track component mount status
+    let active = true;
 
-    (async () => {
+    const fetchAssignedUsers = async () => {
       try {
-        const assigned = await getUsersForProcedure(
-          planId,
-          procedure.procedureId
-        );
-        const mapped = assigned.map((u) => ({
-          label: u.name,
-          value: u.userId,
+        const response = await getUsersForProcedure(identifiers.planId, identifiers.procedureId);
+        const formatted = response.map(({ userId, name }) => ({
+          value: userId,
+          label: name,
         }));
-
-        // Only set state if component is still mounted
-        if (isMounted) {
-          setSelectedUsers(mapped);
-        }
-      } catch (err) {
-        console.error("Failed to load assigned users:", err);
+        if (active) setAssignedUsers(formatted);
+      } catch (error) {
+        console.error("Failed to fetch assigned users", error);
       }
-    })();
+    };
+
+    fetchAssignedUsers();
 
     return () => {
-      isMounted = false; // cleanup on unmount
+      active = false;
     };
-  }, [planId, procedure.procedureId]);
+  }, [identifiers.planId, identifiers.procedureId]);
 
-  const handleAssignUserToProcedure = async (selectedOptions) => {
-    const previous = selectedUsers.map((u) => u.value);
-    const current = selectedOptions.map((u) => u.value);
+  // Handle selection updates
+  const handleAssignmentChange = useCallback(
+    async (newSelection) => {
+      const prevIds = assignedUsers.map((u) => u.value);
+      const nextIds = newSelection.map((u) => u.value);
 
-    if (selectedOptions.length === 0 && previous.length > 0) {
+      const toAdd = nextIds.filter((id) => !prevIds.includes(id));
+      const toRemove = prevIds.filter((id) => !nextIds.includes(id));
+
       try {
-        await removeAllUsersFromProcedure(planId, procedure.procedureId);
-        setSelectedUsers([]);
-      } catch (err) {
-        console.error("Error removing all assigned users:", err);
+        if (nextIds.length === 0 && prevIds.length > 0) {
+          await removeAllUsersFromProcedure(identifiers.planId, identifiers.procedureId);
+          setAssignedUsers([]);
+          return;
+        }
+
+        await addProcedureToPlan(identifiers.planId, identifiers.procedureId);
+
+        await Promise.all([
+          ...toAdd.map((id) =>
+            assignUserToProcedure(identifiers.planId, identifiers.procedureId, id)
+          ),
+          ...toRemove.map((id) =>
+            removeUserFromProcedure(identifiers.planId, identifiers.procedureId, id)
+          ),
+        ]);
+
+        setAssignedUsers(newSelection);
+      } catch (error) {
+        console.error("Failed to update assignments", error);
       }
-      return;
-    }
-
-    const removed = previous.filter((id) => !current.includes(id));
-    const added = current.filter((id) => !previous.includes(id));
-
-    try {
-      await addProcedureToPlan(planId, procedure.procedureId);
-
-      for (const userId of added) {
-        await assignUserToProcedure(planId, procedure.procedureId, userId);
-      }
-
-      for (const userId of removed) {
-        await removeUserFromProcedure(planId, procedure.procedureId, userId);
-      }
-
-      setSelectedUsers(selectedOptions);
-    } catch (err) {
-      console.error("Error updating user assignments:", err);
-    }
-  };
+    },
+    [assignedUsers, identifiers.planId, identifiers.procedureId]
+  );
 
   return (
     <div className='py-2'>
       <div>{procedure.procedureTitle}</div>
-
-      <ReactSelect
+      <Select
         className='mt-2'
-        placeholder='Select User to Assign'
-        isMulti={true}
+        placeholder='Assign users'
+        isMulti
         options={users}
-        value={selectedUsers}
-        onChange={handleAssignUserToProcedure}
+        value={assignedUsers}
+        onChange={handleAssignmentChange}
       />
     </div>
   );
 };
 
-export default PlanProcedureItem;
+export default ProcedureAssignment;

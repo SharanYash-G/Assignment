@@ -5,74 +5,98 @@ using global::RL.Backend.Exceptions;
 using global::RL.Data.DataModels;
 using MediatR;
 
-
 namespace RL.Backend.UnitTests.PlanProcedureUsers
 {
+    /// <summary>
+    /// Unit tests for assigning users to procedures within a plan.
+    /// </summary>
     [TestClass]
     public class AssignUserTests
     {
+        /// <summary>
+        /// Should return bad request when PlanId is invalid.
+        /// </summary>
         [TestMethod]
         public async Task InvalidInputs_ReturnsBadRequest()
         {
-            var context = DbContextHelper.CreateContext();
-            var sut = new AssignUserHandler(context);
+            var db = DbContextHelper.CreateContext();
+            var handler = new AssignUserHandler(db);
 
-            var result = await sut.Handle(new AssignUserToProcedure
+            var invalidCommand = new AssignUserToProcedure
             {
                 PlanId = -1,
                 ProcedureId = 1,
                 UserId = 1
-            }, default);
+            };
 
-            result.Succeeded.Should().BeFalse();
-            result.Exception.Should().BeOfType<BadRequestException>();
+            var result = await handler.Handle(invalidCommand, default);
+
+            result.Succeeded.Should().BeFalse("PlanId is invalid");
+            result.Exception.Should().BeOfType<BadRequestException>("should throw BadRequestException for invalid input");
         }
 
+        /// <summary>
+        /// Should succeed without duplicating assignment if already assigned.
+        /// </summary>
         [TestMethod]
         public async Task AlreadyAssigned_ReturnsSuccessWithoutDuplicate()
         {
-            var context = DbContextHelper.CreateContext();
-            var planId = 1; var procedureId = 2; var userId = 3;
+            var db = DbContextHelper.CreateContext();
+            var planId = 1;
+            var procedureId = 2;
+            var userId = 3;
 
-            context.PlanProcedureUsers.Add(new PlanProcedureUser
+            db.PlanProcedureUsers.Add(new PlanProcedureUser
             {
                 PlanId = planId,
                 ProcedureId = procedureId,
                 UserId = userId
             });
-            await context.SaveChangesAsync();
 
-            var sut = new AssignUserHandler(context);
-            var result = await sut.Handle(new AssignUserToProcedure
+            await db.SaveChangesAsync();
+
+            var handler = new AssignUserHandler(db);
+
+            var command = new AssignUserToProcedure
             {
                 PlanId = planId,
                 ProcedureId = procedureId,
                 UserId = userId
-            }, default);
+            };
+
+            var result = await handler.Handle(command, default);
 
             result.Succeeded.Should().BeTrue();
             result.Value.Should().BeOfType<Unit>();
 
-            var count = context.PlanProcedureUsers
-                .Count(p => p.PlanId == planId && p.ProcedureId == procedureId && p.UserId == userId);
-            count.Should().Be(1);
+            var count = db.PlanProcedureUsers.Count(p =>
+                p.PlanId == planId &&
+                p.ProcedureId == procedureId &&
+                p.UserId == userId);
+
+            count.Should().Be(1, "no duplicate should be created");
         }
 
+        /// <summary>
+        /// Should assign a user to procedure when inputs are valid.
+        /// </summary>
         [TestMethod]
         public async Task ValidAssignment_AddsToDb()
         {
-            var context = DbContextHelper.CreateContext();
-            var sut = new AssignUserHandler(context);
+            var db = DbContextHelper.CreateContext();
+            var handler = new AssignUserHandler(db);
 
-            var result = await sut.Handle(new AssignUserToProcedure
+            var command = new AssignUserToProcedure
             {
                 PlanId = 1,
                 ProcedureId = 1,
                 UserId = 1
-            }, default);
+            };
+
+            var result = await handler.Handle(command, default);
 
             result.Succeeded.Should().BeTrue();
-            context.PlanProcedureUsers.Should().ContainSingle();
+            db.PlanProcedureUsers.Should().ContainSingle();
         }
     }
 }

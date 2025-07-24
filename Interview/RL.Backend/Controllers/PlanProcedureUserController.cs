@@ -9,7 +9,7 @@ using RL.Data.DataModels;
 namespace RL.Backend.Controllers
 {
     [ApiController]
-   [Route("api/plan-procedures")]
+    [Route("api/plan-procedures")]
     public class PlanProcedureUsersController : ControllerBase
     {
         private readonly RLContext _context;
@@ -21,46 +21,45 @@ namespace RL.Backend.Controllers
             _mediator = mediator;
         }
 
+        /// <summary>
+        /// Assigns a user to a procedure.
+        /// </summary>
         [HttpPost]
         public async Task<IActionResult> AssignUser([FromBody] AssignUserToProcedure command)
-        {
-            var result = await _mediator.Send(command);
-            return result.ToActionResult();
-        }
+            => (await _mediator.Send(command)).ToActionResult();
 
+        /// <summary>
+        /// Removes a specific user from a procedure.
+        /// </summary>
         [HttpDelete("{planId:int}/{procedureId:int}/{userId:int}")]
         public async Task<IActionResult> RemoveUser(int planId, int procedureId, int userId)
-        {
-            var result = await _mediator.Send(new RemoveUser
+            => (await _mediator.Send(new RemoveUser
             {
                 PlanId = planId,
                 ProcedureId = procedureId,
                 UserId = userId
-            });
+            })).ToActionResult();
 
-            return result.ToActionResult();
-        }
-
+        /// <summary>
+        /// Removes all users assigned to a specific procedure.
+        /// </summary>
         [HttpDelete("{planId:int}/{procedureId:int}")]
         public async Task<IActionResult> RemoveAllUsers(int planId, int procedureId)
-        {
-            var result = await _mediator.Send(new RemoveAllUsers
+            => (await _mediator.Send(new RemoveAllUsers
             {
                 PlanId = planId,
                 ProcedureId = procedureId
-            });
+            })).ToActionResult();
 
-            return result.ToActionResult();
-        }
-
+        /// <summary>
+        /// Gets users assigned to a specific procedure in a plan.
+        /// </summary>
         [HttpGet("{planId:int}/{procedureId:int}")]
-        public async Task<ActionResult<IEnumerable<User>>> GetAssignedUsers(int planId, int procedureId)
+        public async Task<IActionResult> GetAssignedUsers(int planId, int procedureId)
         {
-            if (planId < 1)
-                return BadRequest($"Invalid PlanId: {planId}. Must be greater than zero.");
-
-            if (procedureId < 1)
-                return BadRequest($"Invalid ProcedureId: {procedureId}. Must be greater than zero.");
+            var validationResult = ValidateIds(planId, procedureId);
+            if (validationResult != null)
+                 return validationResult; 
 
             var users = await _context.PlanProcedureUsers
                 .Where(pu => pu.PlanId == planId && pu.ProcedureId == procedureId)
@@ -69,6 +68,20 @@ namespace RL.Backend.Controllers
                 .ToListAsync();
 
             return Ok(users);
+        }
+
+        /// <summary>
+        /// Validates that PlanId and ProcedureId are positive integers.
+        /// </summary>
+        private IActionResult? ValidateIds(int planId, int procedureId)
+        {
+            if (planId < 1)
+                return BadRequest($"Invalid PlanId: {planId}. Must be greater than zero.");
+
+            if (procedureId < 1)
+                return BadRequest($"Invalid ProcedureId: {procedureId}. Must be greater than zero.");
+
+            return null;
         }
     }
 }

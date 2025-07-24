@@ -6,43 +6,52 @@ using RL.Data;
 
 namespace RL.Backend.Commands.Handlers.PlanProcedureUsers
 {
+    /// <summary>
+    /// Handles the removal of a specific user from a procedure in a plan.
+    /// </summary>
     public class RemoveUserHandler : IRequestHandler<RemoveUser, ApiResponse<Unit>>
     {
         private readonly RLContext _context;
 
+        /// <summary>
+        /// Initializes a new instance with the database context.
+        /// </summary>
         public RemoveUserHandler(RLContext context)
         {
             _context = context;
         }
 
+        /// <summary>
+        /// Removes a specific user assigned to the given plan and procedure.
+        /// </summary>
         public async Task<ApiResponse<Unit>> Handle(RemoveUser request, CancellationToken cancellationToken)
         {
             try
             {
-                var planId = request.PlanId;
-                var procedureId = request.ProcedureId;
-                var userId = request.UserId;
+                var plan = request.PlanId;
+                var procedure = request.ProcedureId;
+                var user = request.UserId;
 
-                if (planId <= 0)
-                    return ApiResponse<Unit>.Fail(new BadRequestException($"Plan ID must be greater than zero. Given: {planId}"));
+                if (plan <= 0)
+                    return ApiResponse<Unit>.Fail(new BadRequestException($"Invalid Plan ID: {plan}. Must be greater than zero."));
 
-                if (procedureId <= 0)
-                    return ApiResponse<Unit>.Fail(new BadRequestException($"Procedure ID must be greater than zero. Given: {procedureId}"));
+                if (procedure <= 0)
+                    return ApiResponse<Unit>.Fail(new BadRequestException($"Invalid Procedure ID: {procedure}. Must be greater than zero."));
 
-                if (userId <= 0)
-                    return ApiResponse<Unit>.Fail(new BadRequestException($"User ID must be greater than zero. Given: {userId}"));
+                if (user <= 0)
+                    return ApiResponse<Unit>.Fail(new BadRequestException($"Invalid User ID: {user}. Must be greater than zero."));
 
-                var mapping = await _context.PlanProcedureUsers.FindAsync(
-                    new object[] { planId, procedureId, userId },
+                var link = await _context.PlanProcedureUsers.FindAsync(
+                    new object[] { plan, procedure, user },
                     cancellationToken);
 
-                if (mapping is null)
+                if (link is null)
                 {
-                    var msg = $"No mapping found for PlanId={planId}, ProcedureId={procedureId}, UserId={userId}";
+                    var msg = $"No mapping found for PlanId={plan}, ProcedureId={procedure}, UserId={user}";
                     return ApiResponse<Unit>.Fail(new NotFoundException(msg));
                 }
 
-                _context.PlanProcedureUsers.Remove(mapping);
+                _context.PlanProcedureUsers.Remove(link);
                 await _context.SaveChangesAsync(cancellationToken);
 
                 return ApiResponse<Unit>.Succeed(Unit.Value);

@@ -8,48 +8,56 @@ using RL.Data.DataModels;
 
 namespace RL.Backend.Commands.Handlers.PlanProcedureUsers
 {
+    /// <summary>
+    /// Handles assigning a user to a procedure.
+    /// </summary>
     public class AssignUserHandler : IRequestHandler<AssignUserToProcedure, ApiResponse<Unit>>
     {
         private readonly RLContext _context;
 
+        /// <summary>
+        /// Constructor to inject the database context.
+        /// </summary>
         public AssignUserHandler(RLContext context)
         {
             _context = context;
         }
 
+        /// <summary>
+        /// Assigns a user to a procedure if not already assigned.
+        /// </summary>
         public async Task<ApiResponse<Unit>> Handle(AssignUserToProcedure request, CancellationToken cancellationToken)
         {
             try
             {
-                var planId = request.PlanId;
-                var procedureId = request.ProcedureId;
-                var userId = request.UserId;
+                var plan = request.PlanId;
+                var procedure = request.ProcedureId;
+                var user = request.UserId;
 
-                if (planId <= 0)
-                    return ApiResponse<Unit>.Fail(new BadRequestException($"Plan ID must be positive. Provided: {planId}"));
+                if (user <= 0)
+                    return ApiResponse<Unit>.Fail(new BadRequestException($"Invalid User ID: {user}. It must be greater than 0."));
 
-                if (procedureId <= 0)
-                    return ApiResponse<Unit>.Fail(new BadRequestException($"Procedure ID must be positive. Provided: {procedureId}"));
+                if (plan <= 0)
+                    return ApiResponse<Unit>.Fail(new BadRequestException($"Invalid Plan ID: {plan}. It must be greater than 0."));
 
-                if (userId <= 0)
-                    return ApiResponse<Unit>.Fail(new BadRequestException($"User ID must be positive. Provided: {userId}"));
+                if (procedure <= 0)
+                    return ApiResponse<Unit>.Fail(new BadRequestException($"Invalid Procedure ID: {procedure}. It must be greater than 0."));
 
-                var alreadyExists = await _context.PlanProcedureUsers.AnyAsync(entry =>
-                    entry.PlanId == planId &&
-                    entry.ProcedureId == procedureId &&
-                    entry.UserId == userId,
-                    cancellationToken);
+                var exists = await _context.PlanProcedureUsers.AnyAsync(
+                    entry => entry.PlanId == plan && entry.ProcedureId == procedure && entry.UserId == user,
+                    cancellationToken
+                );
 
-                if (!alreadyExists)
+                if (!exists)
                 {
-                    var newMapping = new PlanProcedureUser
+                    var mapping = new PlanProcedureUser
                     {
-                        PlanId = planId,
-                        ProcedureId = procedureId,
-                        UserId = userId
+                        PlanId = plan,
+                        ProcedureId = procedure,
+                        UserId = user
                     };
 
-                    _context.PlanProcedureUsers.Add(newMapping);
+                    _context.PlanProcedureUsers.Add(mapping);
                     await _context.SaveChangesAsync(cancellationToken);
                 }
 
